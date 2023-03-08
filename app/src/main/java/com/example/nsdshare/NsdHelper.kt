@@ -4,38 +4,131 @@ import android.content.ContentValues.TAG
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Environment
 import android.util.Log
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import com.example.nsdshare.NsdShareViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.*
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
 import kotlin.properties.Delegates
 
 class NsdHelper(
-    val deviceName: String,
     val ls: MutableLiveData<List<NsdServiceInfo>>
 ) {
-    private lateinit var serverSocket: ServerSocket
+    lateinit var serverSocket: ServerSocket
     private var mLocalPort: Int = 0
-    private var mServiceName: String = "NsdChat"+"$"+deviceName
+    private var mServiceName: String = "NsdChat"
     lateinit var nsdManager: NsdManager
     private val SERVICE_TYPE = "_nsdchat._tcp."
     private var resolvedPort by Delegates.notNull<Int>()
     private lateinit var resolvedHost: InetAddress
     private lateinit var resolvedmService : NsdServiceInfo
     var attributes: MutableMap<String, ByteArray> = mutableMapOf()
+    lateinit var deviceName: String
+    val downloadsDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+    val appDownloadPath = File(downloadsDirectory,"NsdShare")
+    val downloadsPath = {
+        if (!appDownloadPath.exists()) {
+            appDownloadPath.mkdirs().toString()
+        }
+        appDownloadPath.toString()
+    }
 
-    var isServiceRunning = MutableLiveData<Boolean>(false)
+    var isServiceRunning = MutableLiveData(false)
 
-    private var _isResolved = MutableLiveData<Boolean>(false)
-    var isResolved: LiveData<Boolean> = _isResolved
+    private var _isConnected = MutableLiveData(false)
+    var isConnected: LiveData<Boolean> = _isConnected
+    var socket: Socket = Socket()
 
-    fun initializeServerSocket() {
+    fun initializeServerSocket(nsdShareViewModel: NsdShareViewModel) {
         // Initializing with '0' because it will assign the open port itself
         serverSocket = ServerSocket(0).also { socket ->
             // Store the chosen port.
             mLocalPort = socket.localPort
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                while (true) {
+                    nsdShareViewModel.nsdHelper.socket = serverSocket.accept()
+                    listenForFiles(nsdShareViewModel = nsdShareViewModel)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun initializeSocket(nsdShareViewModel: NsdShareViewModel, serviceInfo: NsdServiceInfo) {
+        try {
+            CoroutineScope(Dispatchers.IO).launch {
+                log(Tag.INFO, "ServiceInfo Host: ${serviceInfo.host.toString().replace("/","")}")
+                nsdShareViewModel.nsdHelper.socket = Socket(serviceInfo.host, serviceInfo.port)
+                if (socket.isConnected) {
+                    _isConnected.postValue(true)
+                    receiveFile(nsdShareViewModel = nsdShareViewModel)
+                }
+                listenForFiles(nsdShareViewModel = nsdShareViewModel)
+            }
+        }
+        catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun listenForFiles(nsdShareViewModel: NsdShareViewModel) {
+        receiveFile(nsdShareViewModel)
+    }
+
+    fun sendFile(nsdShareViewModel: NsdShareViewModel, filePath: File) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val fileToSend = filePath
+            val buffer = ByteArray(1024)
+            var bytesRead: Int
+            val inputStream: InputStream = FileInputStream(fileToSend)
+            if (inputStream != null && nsdShareViewModel.nsdHelper.socket.isConnected) {
+                val outputStream: OutputStream = nsdShareViewModel.nsdHelper.socket.getOutputStream()
+                log(Tag.INFO, "Sending File")
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    outputStream.write(buffer, 0, bytesRead)
+                }
+                outputStream.close()
+            }
+        }
+    }
+
+    fun receiveFile(nsdShareViewModel: NsdShareViewModel) {
+        CoroutineScope(Dispatchers.IO).launch {
+//            while(true) {
+//            val file = File("/storage/emulated/0/Download/", "NewFile.png")
+            val downloadsDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val downloadsPath = downloadsDirectory.getAbsolutePath()
+            var file = File(downloadsPath, "new")
+            if (!file.exists()) {
+                try {
+                    file.createNewFile()
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                }
+            }
+            val fileOutputStream = FileOutputStream(file)
+            val buffer = ByteArray(1024)
+            var bytesRead: Int
+            val inputStream = nsdShareViewModel.nsdHelper.socket.getInputStream()
+            if (nsdShareViewModel.nsdHelper.socket.isConnected && inputStream != null) {
+                log(Tag.INFO, "Receiving File and socket connected? ${socket.isConnected} ${nsdShareViewModel.nsdHelper.socket.isConnected}")
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    fileOutputStream.write(buffer, 0, bytesRead)
+                    log(Tag.INFO, "isBeing Received $buffer")
+                }
+            }
+            log(Tag.INFO, "WROTE TO ${file.absolutePath}")
+//            }
         }
     }
 
@@ -48,10 +141,12 @@ class NsdHelper(
 
         override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
             log(Tag.INFO, "Service Registration Failed")
+            isServiceRunning.postValue(false)
         }
 
         override fun onServiceUnregistered(arg0: NsdServiceInfo) {
             log(Tag.INFO, "Service UnRegistration Successfully")
+            isServiceRunning.postValue(false)
         }
 
         override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -64,7 +159,8 @@ class NsdHelper(
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = mServiceName
             serviceType = SERVICE_TYPE
-            attributes['deviceName'] = deviceName
+            log(Tag.INFO, "Setting Attributes ${deviceName}")
+            setAttribute("dName",deviceName)
             setPort(mLocalPort)
         }
 
@@ -75,10 +171,6 @@ class NsdHelper(
 
     fun discoverServices() {
         nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
-    }
-
-    fun onClickResolve(service: NsdServiceInfo) {
-        nsdManager.resolveService(service, resolveListener)
     }
 
     private val discoveryListener = object : NsdManager.DiscoveryListener {
@@ -100,7 +192,6 @@ class NsdHelper(
                 service.serviceName.contains("NsdChat") -> {
                     log(Tag.INFO, "Different machine - ${mServiceName}")
                     nsdManager.resolveService(service, resolveListener)
-                    log(Tag.INFO, "Added $service to list")
                 }
             }
         }
@@ -142,14 +233,15 @@ class NsdHelper(
                 log(Tag.INFO, "Same IP")
                 return
             }
-//            resolvedmService = serviceInfo
-//            resolvedPort = serviceInfo.port
-//            resolvedHost = serviceInfo.host
-//
+            resolvedmService = serviceInfo
+            resolvedPort = serviceInfo.port
+            resolvedHost = serviceInfo.host
             ls.postValue(ls.value!!.plus(listOf(serviceInfo)))
-            _isResolved.postValue(true)
+//            _isResolved.postValue(true)
+            attributes = serviceInfo.attributes
 
-//            log(Tag.INFO, "RESOLVED : $resolvedHost, $resolvedPort, $resolvedmService")
+            log(Tag.INFO, "RESOLVED : $resolvedHost, $resolvedPort, $resolvedmService, ${attributes.get("dName")}")
+            log(Tag.INFO, "${attributes.get("dName")}")
         }
     }
 

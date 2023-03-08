@@ -1,5 +1,6 @@
 package com.example.nsdshare
 
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,10 +11,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import com.ethan.nsdshare.CustomLifeCycleObserver
 import com.example.nsdshare.Navigation.SetupNavGraph
 import com.example.nsdshare.ui.theme.NsdShareTheme
+import java.util.jar.Manifest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +31,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val nsdShareViewModel = NsdShareViewModel(this)
                     val navHostController = rememberNavController()
-                    lifecycle.addObserver(CustomLifeCycleObserver(this, nsdShareViewModel.nsdHelper))
+                    lifecycle.addObserver(CustomLifeCycleObserver(this, nsdShareViewModel))
 
                     SetupNavGraph(nsdShareViewModel = nsdShareViewModel, navHostController = navHostController)
                 }

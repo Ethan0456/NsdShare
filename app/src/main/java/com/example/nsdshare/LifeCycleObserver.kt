@@ -5,19 +5,23 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.example.nsdshare.NsdShareViewModel
 
-class CustomLifeCycleObserver(val context: Context, val nsdHelper: NsdHelper): DefaultLifecycleObserver{
+class CustomLifeCycleObserver(val context: Context, val nsdShareViewModel: NsdShareViewModel): DefaultLifecycleObserver{
     var isPaused = false
     override fun onPause(owner: LifecycleOwner) {
         log(Tag.INFO, "IN PAUSE")
-        nsdHelper?.tearDown()
-        isPaused = true
+        if (nsdShareViewModel.nsdHelper.isServiceRunning.value == true) {
+            nsdShareViewModel.nsdHelper?.tearDown()
+            nsdShareViewModel.nsdHelper.socket.close()
+            isPaused = true
+        }
     }
 
     override fun onResume(owner: LifecycleOwner) {
         log(Tag.INFO, "IN RESUME")
-        if (isPaused) {
-            nsdHelper?.apply {
+        if (isPaused && nsdShareViewModel.nsdHelper.isServiceRunning.value == false) {
+            nsdShareViewModel.nsdHelper?.apply {
                 registerService(context)
                 discoverServices()
             }
@@ -26,7 +30,7 @@ class CustomLifeCycleObserver(val context: Context, val nsdHelper: NsdHelper): D
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
-        nsdHelper?.tearDown()
+        nsdShareViewModel.nsdHelper?.tearDown()
     }
 }
 
