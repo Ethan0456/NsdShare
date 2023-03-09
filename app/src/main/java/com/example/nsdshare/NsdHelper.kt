@@ -1,11 +1,18 @@
 package com.ethan.nsdshare
 
+import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.ContentValues.TAG
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import android.os.Environment
+import android.os.LocaleList
+import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.nsdshare.NsdShareViewModel
@@ -16,12 +23,14 @@ import java.io.*
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.charset.Charset
 import kotlin.properties.Delegates
 
 class NsdHelper(
+    val contentResolver: ContentResolver,
     val ls: MutableLiveData<List<NsdServiceInfo>>
 ) {
-    lateinit var serverSocket: ServerSocket
+    var serverSocket: ServerSocket? = null
     private var mLocalPort: Int = 0
     private var mServiceName: String = "NsdChat"
     lateinit var nsdManager: NsdManager
@@ -46,6 +55,7 @@ class NsdHelper(
     var isConnected: LiveData<Boolean> = _isConnected
     var socket: Socket = Socket()
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun initializeServerSocket(nsdShareViewModel: NsdShareViewModel) {
         // Initializing with '0' because it will assign the open port itself
         serverSocket = ServerSocket(0).also { socket ->
@@ -55,8 +65,13 @@ class NsdHelper(
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 while (true) {
-                    nsdShareViewModel.nsdHelper.socket = serverSocket.accept()
-                    listenForFiles(nsdShareViewModel = nsdShareViewModel)
+                    nsdShareViewModel.nsdHelper.socket = serverSocket!!.accept()
+                    if (nsdShareViewModel.nsdHelper.socket.isConnected) {
+                        log(Tag.INFO, "THIS MEANS SOMEONE WANTS TO SEND FILE")
+                        val nextFileName = writeSocketToString(nsdShareViewModel.nsdHelper.socket)
+                        nsdShareViewModel._history.postValue(nsdShareViewModel._history.value?.plus(listOf(nextFileName)))
+                        writeSocketToFile(contentResolver, nsdShareViewModel.nsdHelper.socket, nextFileName)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -71,9 +86,7 @@ class NsdHelper(
                 nsdShareViewModel.nsdHelper.socket = Socket(serviceInfo.host, serviceInfo.port)
                 if (socket.isConnected) {
                     _isConnected.postValue(true)
-                    receiveFile(nsdShareViewModel = nsdShareViewModel)
                 }
-                listenForFiles(nsdShareViewModel = nsdShareViewModel)
             }
         }
         catch (e: Exception) {
@@ -81,57 +94,92 @@ class NsdHelper(
         }
     }
 
-    fun listenForFiles(nsdShareViewModel: NsdShareViewModel) {
-        receiveFile(nsdShareViewModel)
+    fun writeFileToSocket(socket: Socket, filepath: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val fileUri = File(filepath)
+                val inputStream = FileInputStream(fileUri)
+                val outputStream = socket.outputStream
+
+                inputStream.use { input ->
+                    outputStream.use { output ->
+                        input?.copyTo(output)
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "Error writing file to socket: ${e.message}")
+            }
+        }
     }
 
-    fun sendFile(nsdShareViewModel: NsdShareViewModel, filePath: File) {
+
+    fun writeStringToSocket(socket: Socket, txt: String) {
         CoroutineScope(Dispatchers.IO).launch {
-            val fileToSend = filePath
-            val buffer = ByteArray(1024)
-            var bytesRead: Int
-            val inputStream: InputStream = FileInputStream(fileToSend)
-            if (inputStream != null && nsdShareViewModel.nsdHelper.socket.isConnected) {
-                val outputStream: OutputStream = nsdShareViewModel.nsdHelper.socket.getOutputStream()
-                log(Tag.INFO, "Sending File")
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                }
+            try {
+                val byteArray= txt.toByteArray(Charset.defaultCharset())
+                val outputStream = socket.outputStream
+
+                outputStream.write(byteArray)
+                outputStream.flush()
                 outputStream.close()
+            } catch (e: IOException) {
+                Log.e(TAG, "Error writing data to socket: ${e.message}")
             }
         }
     }
-
-    fun receiveFile(nsdShareViewModel: NsdShareViewModel) {
+    fun writeSocketToString(socket: Socket): String {
+        var receivedString = ""
         CoroutineScope(Dispatchers.IO).launch {
-//            while(true) {
-//            val file = File("/storage/emulated/0/Download/", "NewFile.png")
-            val downloadsDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val downloadsPath = downloadsDirectory.getAbsolutePath()
-            var file = File(downloadsPath, "new")
-            if (!file.exists()) {
-                try {
-                    file.createNewFile()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
+            try {
+                val inputStream = socket.getInputStream()
+                val bufferedReader = BufferedReader(InputStreamReader(inputStream))
+                val data = bufferedReader.readLine()
+                receivedString = String(data.toByteArray(Charset.defaultCharset()))
+                inputStream.close()
+            } catch (e: IOException) {
+                Log.e(TAG, "Error reading data from socket: ${e.message}")
             }
-            val fileOutputStream = FileOutputStream(file)
-            val buffer = ByteArray(1024)
-            var bytesRead: Int
-            val inputStream = nsdShareViewModel.nsdHelper.socket.getInputStream()
-            if (nsdShareViewModel.nsdHelper.socket.isConnected && inputStream != null) {
-                log(Tag.INFO, "Receiving File and socket connected? ${socket.isConnected} ${nsdShareViewModel.nsdHelper.socket.isConnected}")
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    fileOutputStream.write(buffer, 0, bytesRead)
-                    log(Tag.INFO, "isBeing Received $buffer")
-                }
-            }
-            log(Tag.INFO, "WROTE TO ${file.absolutePath}")
-//            }
         }
+        return receivedString
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun writeSocketToFile(resolver: ContentResolver, socket: Socket, fileName: String) {
+        // Set up a ContentValues object to describe the file we want to create
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+        }
+
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues) ?: return
+
+        // Open an OutputStream to the file using the Uri
+        val outputStream: OutputStream = resolver.openOutputStream(uri) ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            // Insert the new record into the MediaStore database and get the corresponding Uri
+
+            // Write the contents of the socket to the file using a BufferedOutputStream
+            BufferedOutputStream(outputStream).use { bufferedOutputStream ->
+                socket.getInputStream().use { inputStream ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        bufferedOutputStream.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, contentValues, null, null)
+            }
+        }
+        // If using API level 29 or higher, update the IS_PENDING flag to 0 to finalize the creation of the file
+    }
     private val registrationListener = object : NsdManager.RegistrationListener {
 
         override fun onServiceRegistered(NsdServiceInfo: NsdServiceInfo) {
@@ -252,3 +300,51 @@ class NsdHelper(
         }
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//fun sendFile(nsdShareViewModel: NsdShareViewModel, filePath: File) {
+//    CoroutineScope(Dispatchers.IO).launch {
+//        val fileToSend = filePath
+//        val buffer = ByteArray(1024)
+//        var bytesRead: Int
+//        val inputStream: InputStream = FileInputStream(fileToSend)
+//        if (inputStream != null && nsdShareViewModel.nsdHelper.socket.isConnected) {
+//            val outputStream: OutputStream = nsdShareViewModel.nsdHelper.socket.getOutputStream()
+//            log(Tag.INFO, "Sending File")
+//            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+//                outputStream.write(buffer, 0, bytesRead)
+//            }
+//            outputStream.close()
+//        }
+//    }
+//}
+//fun receiveFile(nsdShareViewModel: NsdShareViewModel) {
+//    CoroutineScope(Dispatchers.IO).launch {
+////            while(true) {
+////            val file = File("/storage/emulated/0/Download/", "NewFile.png")
+//        val downloadsDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+//        val downloadsPath = downloadsDirectory.getAbsolutePath()
+//        var file = File(downloadsPath, "new")
+//        if (!file.exists()) {
+//            try {
+//                file.createNewFile()
+//            } catch (e: IOException) {
+//                e.printStackTrace()
+//            }
+//        }
+//        val fileOutputStream = FileOutputStream(file)
+//        val buffer = ByteArray(1024)
+//        var bytesRead: Int
+//        val inputStream = nsdShareViewModel.nsdHelper.socket.getInputStream()
+//        if (nsdShareViewModel.nsdHelper.socket.isConnected && inputStream != null) {
+//            log(Tag.INFO, "Receiving File and socket connected? ${socket.isConnected} ${nsdShareViewModel.nsdHelper.socket.isConnected}")
+//            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+//                fileOutputStream.write(buffer, 0, bytesRead)
+//                log(Tag.INFO, "isBeing Received $buffer")
+//            }
+//        }
+//        log(Tag.INFO, "WROTE TO ${file.absolutePath}")
+////            }
+//    }
+//}
+//

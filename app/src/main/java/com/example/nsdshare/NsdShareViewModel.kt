@@ -1,9 +1,11 @@
 package com.example.nsdshare
 
 import android.accounts.AccountManager
+import android.content.ContentResolver
 import android.content.Context
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -12,17 +14,18 @@ import java.io.File
 
 
 class NsdShareViewModel(
-    val context: Context
+    val context: Context,
+    val contentResolver: ContentResolver
 ): ViewModel() {
-    val _history = MutableLiveData(listOf(ShareUnit("filename",155,"pending...")))
-    val history: LiveData<List<ShareUnit>> = _history
+    val _history = MutableLiveData<List<String>>(listOf())
+    val history: LiveData<List<String>> = _history
     val connectionStatus = MutableLiveData("")
     var deviceName = Build.MODEL
     var userName: String = getUserNameFromAccountManager()
     var customDeviceName = "$userName's $deviceName"
     val discoverDeviceList = MutableLiveData<List<NsdServiceInfo>>(listOf())
-    val nsdHelper = NsdHelper(discoverDeviceList)
-    var selectedFile: File = File("/storage/emulated/0/Download/NsdShare/NewFile")
+    val nsdHelper = NsdHelper(contentResolver, discoverDeviceList)
+    var selectedFile: File = File("")
 
     fun registerDeviceName() {
         nsdHelper.deviceName = customDeviceName
@@ -45,6 +48,7 @@ class NsdShareViewModel(
     fun changeConnectionStatus(status: String) {
         connectionStatus.value = status
     }
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun initializeServerSocket(nsdShareViewModel: NsdShareViewModel) {
         nsdHelper.initializeServerSocket(nsdShareViewModel = nsdShareViewModel)
     }

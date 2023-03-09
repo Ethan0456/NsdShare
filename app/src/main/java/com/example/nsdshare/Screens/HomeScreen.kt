@@ -4,17 +4,16 @@ import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
-import android.os.Environment
+import android.os.Build
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
@@ -23,25 +22,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.MutableLiveData
 import androidx.navigation.NavHostController
 import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
 import com.example.nsdshare.NsdShareViewModel
+import com.example.nsdshare.UI_Components.CustomBlock
 import com.example.nsdshare.UI_Components.CustomDialog
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.ServerSocket
-import java.net.Socket
 import java.nio.charset.StandardCharsets
 
+@RequiresApi(Build.VERSION_CODES.Q)
 @Composable
 fun HomeScreen(
     nsdShareViewModel: NsdShareViewModel,
@@ -54,6 +47,12 @@ fun HomeScreen(
     var isServiceRunning = nsdShareViewModel.nsdHelper.isServiceRunning.observeAsState()
     var buttonTxt = MutableLiveData("SEND")
     var buttonTxtObserver = buttonTxt.observeAsState()
+    var showDialog = remember { mutableStateOf(false) }
+    var selectFile = remember { mutableStateOf(false) }
+    var _toastTxt = MutableLiveData("")
+    var toastTxtObserver = _toastTxt.observeAsState()
+
+    ToastAnywhere(msg = toastTxtObserver.value.toString())
 
     Column(
         modifier = Modifier
@@ -61,72 +60,67 @@ fun HomeScreen(
         verticalArrangement = Arrangement.SpaceAround,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "NsdShare",
-            color = MaterialTheme.colorScheme.primary,
-            style = TextStyle(fontSize = 25.sp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontWeight = FontWeight.Bold,
-        )
+//        Text(
+//            text = "NsdShare",
+//            color = MaterialTheme.colorScheme.primary,
+//            style = TextStyle(fontSize = 25.sp),
+//            maxLines = 1,
+//            overflow = TextOverflow.Ellipsis,
+//            fontWeight = FontWeight.Bold,
+//        )
+//
+//        CenterAlignedTopAppBar(
+//            title = {
+//                Column(
+//                    horizontalAlignment = Alignment.CenterHorizontally
+//                ) {
+//                    Text(text = connectionStatus.value)
+//                }
+//            }
+//        )
 
-        CenterAlignedTopAppBar(
-            modifier = Modifier.weight(0.5f),
-            title = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(text = connectionStatus.value)
-                }
-            }
-        )
+        NsdSwitch(showDialog = showDialog, nsdShareViewModel = nsdShareViewModel)
 
         LazyColumn(
             modifier = Modifier
+                .padding(16.dp)
                 .weight(9f),
             verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            items(historyObs.value!!.size) { item->
+            items(items = historyObs.value!!.toList()) {item->
                 Button(onClick = {}) {
-                    Text(text = item.toString())
+                    CustomBlock(
+                        fileName = item,
+//                        fileSize = item.totalSpace.toULong(),
+//                        fileStatus = item.extension
+                    )
                 }
             }
         }
 
-        var showDialog = remember { mutableStateOf(false) }
-        var selectFile = remember { mutableStateOf(false) }
-        Button(
+        Column(
             modifier = Modifier
-                .background(MaterialTheme.colorScheme.background)
-                .padding(20.dp)
-                .weight(1f)
-                .heightIn(min = 20.dp, max = 50.dp)
-                .fillMaxSize(),
-                onClick = {
-                    if (buttonTxtObserver.value == "SEND") {
-                        selectFile.value = true
-                        buttonTxt.value = "CONNECT"
-                    }
-                    else if (buttonTxtObserver.value == "CONNECT") {
-                        nsdShareViewModel.changeConnectionStatus("Waiting...")
-                        showDialog.value = true
-                        if (!isServiceRunning.value!!) {
-                            nsdShareViewModel.registerDeviceName()
-                            nsdShareViewModel.initializeServerSocket(nsdShareViewModel)
-                            nsdShareViewModel.startNsdService(nsdShareViewModel)
-                        }
-                        log(Tag.INFO, "isConnected = ${isConnectedObserver.value}")
-                        if (isConnectedObserver.value == true) {
-                            nsdShareViewModel.changeConnectionStatus("Connected")
-                            buttonTxt.value = "SEND"
-                            showDialog.value = false
-                            nsdShareViewModel.nsdHelper.sendFile(nsdShareViewModel,nsdShareViewModel.selectedFile)
-                        }
-                    }
-                }
+                .fillMaxWidth()
+                .weight(1.3f),
+            verticalArrangement = Arrangement.SpaceAround,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = buttonTxtObserver.value.toString())
+            Button(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(20.dp)
+                    .weight(1f)
+                    .fillMaxSize(),
+                onClick = {
+                    selectFile.value = true
+                    nsdShareViewModel._history.setValue(nsdShareViewModel._history.value?.plus(listOf(nsdShareViewModel.selectedFile.name)))
+                    log(Tag.INFO, "isConnected = ${isConnectedObserver.value}")
+                }
+            ) {
+                Text(text = "PICK FILE")
+            }
+
         }
         CustomDialog(
             showDialog = showDialog,
@@ -142,10 +136,17 @@ fun HomeScreen(
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                nsdShareViewModel.connectToResolvedServer(nsdShareViewModel, item)
-                                if (isConnectedObserver.value == true) {
-                                    log(Tag.INFO, "Connected")
-                                    showDialog.value = false
+                                if (nsdShareViewModel.selectedFile.exists()) {
+                                    nsdShareViewModel.connectToResolvedServer(nsdShareViewModel, item)
+                                    if (isConnectedObserver.value == true) {
+                                        log(Tag.INFO, "Connected")
+                                        showDialog.value = false
+                                        log(Tag.INFO, "YES IT IS CONNECTED THUS TURNING OFF DIALOG")
+                                        nsdShareViewModel.nsdHelper.writeStringToSocket(socket = nsdShareViewModel.nsdHelper.socket, txt = nsdShareViewModel.selectedFile.name)
+                                        nsdShareViewModel.nsdHelper.writeFileToSocket(socket = nsdShareViewModel.nsdHelper.socket, filepath = nsdShareViewModel.selectedFile.absolutePath)
+                                    }
+                                } else {
+                                    _toastTxt.value = "Please Select A File First"
                                 }
                             }
                         ) {
@@ -184,22 +185,6 @@ private fun getFileFromUri(context: Context, uri: Uri): File {
     return file
 }
 
-//@Composable
-//fun CustomFloatingActionButton(
-//    selectFile: MutableState<Boolean>,
-//    isConnected: State<Boolean?>
-//) {
-//    if (isConnected.value == true) {
-//        FloatingActionButton(
-//            onClick = {
-//                selectFile.value = true
-//            },
-//        ) {
-//            Icon(Icons.Default.KeyboardArrowUp, "Upload File")
-//        }
-//    }
-//}
-
 @Composable
 fun SelectFile(
     selectFile: MutableState<Boolean>,
@@ -220,8 +205,71 @@ fun SelectFile(
     if (selectFile.value) {
         launcher.launch("*/*")
         selectFile.value = false
-//        nsdShareViewModel.selectedFile = file
-//        nsdShareViewModel.nsdHelper.sendFile(nsdShareViewModel = nsdShareViewModel, file)
-        Toast.makeText(LocalContext.current, "File : ${nsdShareViewModel.selectedFile}", Toast.LENGTH_SHORT).show()
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@RequiresApi(Build.VERSION_CODES.Q)
+@Composable
+fun NsdSwitch(
+    showDialog: MutableState<Boolean>,
+    nsdShareViewModel: NsdShareViewModel
+) {
+    var isChecked by remember { mutableStateOf(false) }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        onClick = {
+            showDialog.value = true
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Start NSD",
+                modifier = Modifier.padding(16.dp),
+                style = TextStyle(fontWeight = FontWeight.Bold)
+            )
+            Switch(
+                checked = isChecked,
+                onCheckedChange = { checked ->
+                    isChecked = checked
+                    if (checked) {
+                        nsdShareViewModel.nsdHelper.initializeServerSocket(nsdShareViewModel)
+                        nsdShareViewModel.registerDeviceName()
+                        nsdShareViewModel.nsdHelper.registerService(nsdShareViewModel.context)
+                        nsdShareViewModel.nsdHelper.discoverServices()
+                        showDialog.value = true
+                    } else {
+                        nsdShareViewModel.nsdHelper.tearDown()
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ToastAnywhere(msg: String) {
+    Toast.makeText(LocalContext.current, msg, Toast.LENGTH_SHORT).show()
+}
+//Button(
+//modifier = Modifier
+//.background(MaterialTheme.colorScheme.background)
+//.padding(20.dp)
+//.weight(1f)
+//.heightIn(min = 20.dp, max = 50.dp)
+//.fillMaxSize(),
+//onClick = {
+//    showDialog.value = true
+//    log(Tag.INFO, "isConnected = ${isConnectedObserver.value}")
+//}
+//) {
+//    Text(text = "CONNECT")
+//}

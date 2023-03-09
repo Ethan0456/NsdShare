@@ -1,5 +1,6 @@
 package com.example.nsdshare
 
+import android.content.ContentResolver
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -29,7 +31,8 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val nsdShareViewModel = NsdShareViewModel(this)
+                    val contentResolver = getContentResolver()
+                    val nsdShareViewModel = NsdShareViewModel(this, contentResolver)
                     val navHostController = rememberNavController()
                     lifecycle.addObserver(CustomLifeCycleObserver(this, nsdShareViewModel))
 
