@@ -1,7 +1,5 @@
 package com.example.nsdshare
 
-import android.content.ContentResolver
-import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,15 +9,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import com.ethan.nsdshare.CustomLifeCycleObserver
+import com.example.ftpm3.ui.theme.NsdShareTheme
 import com.example.nsdshare.Navigation.SetupNavGraph
-import com.example.nsdshare.ui.theme.NsdShareTheme
-import java.util.jar.Manifest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -1,13 +1,15 @@
 package com.example.nsdshare.Navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.nsdshare.DiscoverScreen
 import com.example.nsdshare.NsdShareViewModel
 import com.example.nsdshare.Screens.HomeScreen
 
+@RequiresApi(Build.VERSION_CODES.Q)
 @Composable
 fun SetupNavGraph(
     nsdShareViewModel: NsdShareViewModel,
@@ -21,11 +23,6 @@ fun SetupNavGraph(
             route = Screens.Home.route
         ) {
             HomeScreen(nsdShareViewModel, navHostController)
-        }
-        composable(
-            route = Screens.Discover.route
-        ) {
-            DiscoverScreen(nsdShareViewModel, navHostController)
         }
     }
 }

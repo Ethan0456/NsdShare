@@ -1,8 +1,11 @@
 package com.example.nsdshare.Screens
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.ContentResolver
 import android.content.Context
+import android.content.Intent
+import android.graphics.DiscretePathEffect
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -14,22 +17,32 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.lifecycle.MutableLiveData
 import androidx.navigation.NavHostController
 import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
+import com.example.nsdshare.AsyncFileSender
 import com.example.nsdshare.NsdShareViewModel
+import com.example.nsdshare.ShareUnit
 import com.example.nsdshare.UI_Components.CustomBlock
 import com.example.nsdshare.UI_Components.CustomDialog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
@@ -46,13 +59,14 @@ fun HomeScreen(
     val discoverDeviceListObserver = nsdShareViewModel.nsdHelper.ls.observeAsState()
     var isServiceRunning = nsdShareViewModel.nsdHelper.isServiceRunning.observeAsState()
     var buttonTxt = MutableLiveData("SEND")
-    var buttonTxtObserver = buttonTxt.observeAsState()
     var showDialog = remember { mutableStateOf(false) }
     var selectFile = remember { mutableStateOf(false) }
     var _toastTxt = MutableLiveData("")
     var toastTxtObserver = _toastTxt.observeAsState()
+    val context = LocalContext.current
 
-    ToastAnywhere(msg = toastTxtObserver.value.toString())
+    if (toastTxtObserver.value.toString() != "")
+        ToastAnywhere(msg = toastTxtObserver.value.toString())
 
     Column(
         modifier = Modifier
@@ -60,40 +74,27 @@ fun HomeScreen(
         verticalArrangement = Arrangement.SpaceAround,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-//        Text(
-//            text = "NsdShare",
-//            color = MaterialTheme.colorScheme.primary,
-//            style = TextStyle(fontSize = 25.sp),
-//            maxLines = 1,
-//            overflow = TextOverflow.Ellipsis,
-//            fontWeight = FontWeight.Bold,
-//        )
-//
-//        CenterAlignedTopAppBar(
-//            title = {
-//                Column(
-//                    horizontalAlignment = Alignment.CenterHorizontally
-//                ) {
-//                    Text(text = connectionStatus.value)
-//                }
-//            }
-//        )
-
         NsdSwitch(showDialog = showDialog, nsdShareViewModel = nsdShareViewModel)
 
         LazyColumn(
             modifier = Modifier
                 .padding(16.dp)
                 .weight(9f),
-            verticalArrangement = Arrangement.SpaceEvenly,
+            verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             items(items = historyObs.value!!.toList()) {item->
-                Button(onClick = {}) {
+                Button(
+                    onClick = {
+                    },
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp)),
+                ) {
                     CustomBlock(
-                        fileName = item,
-//                        fileSize = item.totalSpace.toULong(),
-//                        fileStatus = item.extension
+                        fileName = item.file.name,
+//                        fileStatus = item.fileStatus
                     )
                 }
             }
@@ -114,11 +115,13 @@ fun HomeScreen(
                     .fillMaxSize(),
                 onClick = {
                     selectFile.value = true
-                    nsdShareViewModel._history.setValue(nsdShareViewModel._history.value?.plus(listOf(nsdShareViewModel.selectedFile.name)))
                     log(Tag.INFO, "isConnected = ${isConnectedObserver.value}")
                 }
             ) {
-                Text(text = "PICK FILE")
+                Text(
+                    text = "PICK FILE",
+                    style = TextStyle(fontWeight = FontWeight.Bold)
+                )
             }
 
         }
@@ -136,14 +139,19 @@ fun HomeScreen(
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                if (nsdShareViewModel.selectedFile.exists()) {
-                                    nsdShareViewModel.connectToResolvedServer(nsdShareViewModel, item)
-                                    if (isConnectedObserver.value == true) {
-                                        log(Tag.INFO, "Connected")
-                                        showDialog.value = false
-                                        log(Tag.INFO, "YES IT IS CONNECTED THUS TURNING OFF DIALOG")
-                                        nsdShareViewModel.nsdHelper.writeStringToSocket(socket = nsdShareViewModel.nsdHelper.socket, txt = nsdShareViewModel.selectedFile.name)
-                                        nsdShareViewModel.nsdHelper.writeFileToSocket(socket = nsdShareViewModel.nsdHelper.socket, filepath = nsdShareViewModel.selectedFile.absolutePath)
+                                if (nsdShareViewModel.history.value!!.isNotEmpty()) {
+                                    log(Tag.INFO, "Connected")
+                                    showDialog.value = false
+                                    log(Tag.INFO, "YES IT IS CONNECTED THUS TURNING OFF DIALOG")
+                                    val asyncFileSender = AsyncFileSender(item.host, item.port)
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        for (file in nsdShareViewModel.history.value!!.toList()) {
+//                                            if (file.fileStatus == "pending") {
+                                            log(Tag.INFO, "Files in history ${file.file.name}")
+                                                asyncFileSender.sendFile(file.file)
+//                                                file.fileStatus = "completed"
+//                                            }
+                                        }
                                     }
                                 } else {
                                     _toastTxt.value = "Please Select A File First"
@@ -156,7 +164,7 @@ fun HomeScreen(
                 }
             }
         )
-        SelectFile(selectFile = selectFile, nsdShareViewModel = nsdShareViewModel)
+        SelectFile(context = context,selectFile = selectFile, nsdShareViewModel = nsdShareViewModel)
     }
 }
 
@@ -187,24 +195,33 @@ private fun getFileFromUri(context: Context, uri: Uri): File {
 
 @Composable
 fun SelectFile(
+    context: Context,
     selectFile: MutableState<Boolean>,
     nsdShareViewModel: NsdShareViewModel
 ) {
-    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
             uri?.let {
                 uri?.let {
-                    nsdShareViewModel.selectedFile = getFileFromUri(context, uri)
-                    log(Tag.INFO, "AB = ${nsdShareViewModel.selectedFile.absolutePath}")
+                    val file = getFileFromUri(context = context, uri)
+                    log(Tag.INFO, "UPDATED HISTORY LIST WITH ${file.name}")
+                    nsdShareViewModel._history.setValue(nsdShareViewModel._history.value?.plus(listOf(
+                        ShareUnit(file.absolutePath.toHashSet().toString(),file)
+                    )))
+                    log(Tag.INFO, "AB = ${file.path}")
+                    selectFile.value = false
                 }
             }
         }
     )
     if (selectFile.value) {
-        launcher.launch("*/*")
-        selectFile.value = false
+        DisposableEffect(Unit) {
+            launcher.launch("*/*")
+            onDispose {
+                log(Tag.INFO, "INSIDE ONDISPOSE")
+            }
+        }
     }
 }
 
@@ -219,7 +236,7 @@ fun NsdSwitch(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight(),
+            .height(80.dp),
         onClick = {
             showDialog.value = true
         }
@@ -227,16 +244,22 @@ fun NsdSwitch(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
                 .wrapContentHeight(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Start NSD",
+                text = "Start Network Service Discovery",
                 modifier = Modifier.padding(16.dp),
-                style = TextStyle(fontWeight = FontWeight.Bold)
+                style = TextStyle(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
             )
             Switch(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                colors = SwitchDefaults.colors(uncheckedThumbColor = MaterialTheme.colorScheme.inverseOnSurface, uncheckedBorderColor = MaterialTheme.colorScheme.inverseOnSurface, uncheckedTrackColor = MaterialTheme.colorScheme.inversePrimary),
                 checked = isChecked,
                 onCheckedChange = { checked ->
                     isChecked = checked

@@ -17,22 +17,17 @@ class NsdShareViewModel(
     val context: Context,
     val contentResolver: ContentResolver
 ): ViewModel() {
-    val _history = MutableLiveData<List<String>>(listOf())
-    val history: LiveData<List<String>> = _history
+    val _history = MutableLiveData<List<ShareUnit>>(listOf())
+    val history: LiveData<List<ShareUnit>> = _history
     val connectionStatus = MutableLiveData("")
     var deviceName = Build.MODEL
     var userName: String = getUserNameFromAccountManager()
     var customDeviceName = "$userName's $deviceName"
     val discoverDeviceList = MutableLiveData<List<NsdServiceInfo>>(listOf())
     val nsdHelper = NsdHelper(contentResolver, discoverDeviceList)
-    var selectedFile: File = File("")
 
     fun registerDeviceName() {
         nsdHelper.deviceName = customDeviceName
-    }
-
-    fun connectToResolvedServer(nsdShareViewModel: NsdShareViewModel, serviceInfo: NsdServiceInfo) {
-        nsdHelper.initializeSocket(nsdShareViewModel, serviceInfo)
     }
 
     private fun getUserNameFromAccountManager(): String {
@@ -41,20 +36,7 @@ class NsdShareViewModel(
         return if (accounts.size > 0) {
             accounts[0].name
         } else {
-            "Unknown User"
+            "Someone"
         }
-    }
-
-    fun changeConnectionStatus(status: String) {
-        connectionStatus.value = status
-    }
-    @RequiresApi(Build.VERSION_CODES.Q)
-    fun initializeServerSocket(nsdShareViewModel: NsdShareViewModel) {
-        nsdHelper.initializeServerSocket(nsdShareViewModel = nsdShareViewModel)
-    }
-
-    fun startNsdService(nsdShareViewModel: NsdShareViewModel) {
-        nsdHelper.registerService(context)
-        nsdHelper.discoverServices()
     }
 }
