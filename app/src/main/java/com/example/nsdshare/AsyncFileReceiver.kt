@@ -6,10 +6,15 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.MutableLiveData
 import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
+import com.example.nsdshare.UI_Components.AcceptDownload
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -19,6 +24,7 @@ import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
 import java.nio.charset.Charset
+import java.util.concurrent.CompletableFuture
 
 class AsyncFileReceiver(
     private val port: Int,
@@ -50,16 +56,17 @@ class AsyncFileReceiver(
                         socketChannel: AsynchronousSocketChannel,
                         attachment: Void?
                     ) {
-                        Log.d(
-                            TAG,
+                        log(
+                            Tag.INFO,
                             "Accepted incoming connection from ${socketChannel.remoteAddress}"
                         )
+                        nsdShareViewModel.askForDownloadPermission()
 
                         // Read the fixed-size header to get the filename length
                         val headerBuffer = ByteBuffer.allocate(HEADER_SIZE)
                         socketChannel.read(headerBuffer).get()
                         headerBuffer.flip()
-                        val fileNameLength = headerBuffer.getInt()
+                        val fileNameLength = headerBuffer.int
 
                         // Read the filename
                         val fileNameBuffer = ByteBuffer.allocate(fileNameLength)
@@ -67,7 +74,7 @@ class AsyncFileReceiver(
                         fileNameBuffer.flip()
                         val fileName = String(fileNameBuffer.array(), Charset.defaultCharset())
 
-                        log(Tag.INFO, "FILENAME : ${fileName}")
+                        log(Tag.INFO, "FILENAME : $fileName")
                         log(Tag.INFO, "RECEIVING FILENAME")
 
                         // Create the file using MediaStore API

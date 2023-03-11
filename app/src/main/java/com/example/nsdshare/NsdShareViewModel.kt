@@ -11,11 +11,16 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.ethan.nsdshare.NsdHelper
 import com.example.nsdshare.UI_Components.AcceptDownload
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 
 
@@ -30,6 +35,20 @@ class NsdShareViewModel(
     var customDeviceName = "$userName's $deviceName"
     val discoverDeviceList = MutableLiveData<List<NsdServiceInfo>>(listOf())
     val nsdHelper = NsdHelper(contentResolver, discoverDeviceList)
+
+    val showAskForPermissionDialog = MutableLiveData(false)
+    val askForDownloadResponse = MutableLiveData(false)
+
+    fun askForDownloadPermission() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val completableDeferred = CompletableDeferred<Unit>()
+            completableDeferred.await()
+            if (completableDeferred.isActive) {
+                showAskForPermissionDialog.value = true
+            }
+        }
+        return askforpermission
+    }
 
     fun registerDeviceName() {
         nsdHelper.deviceName = customDeviceName
