@@ -10,8 +10,8 @@ import com.example.nsdshare.NsdShareViewModel
 class CustomLifeCycleObserver(val context: Context, val nsdShareViewModel: NsdShareViewModel): DefaultLifecycleObserver{
     var isPaused = false
     override fun onPause(owner: LifecycleOwner) {
-        log(Tag.INFO, "IN PAUSE")
         if (nsdShareViewModel.nsdHelper.isServiceRunning.value == true) {
+            log(Tag.INFO, "IN PAUSE")
             nsdShareViewModel.nsdHelper?.tearDown()
             nsdShareViewModel.nsdHelper.socket.close()
             isPaused = true
@@ -19,8 +19,8 @@ class CustomLifeCycleObserver(val context: Context, val nsdShareViewModel: NsdSh
     }
 
     override fun onResume(owner: LifecycleOwner) {
-        log(Tag.INFO, "IN RESUME")
         if (isPaused && nsdShareViewModel.nsdHelper.isServiceRunning.value == false) {
+            log(Tag.INFO, "IN RESUME")
             nsdShareViewModel.nsdHelper?.apply {
                 registerService(context)
                 discoverServices()

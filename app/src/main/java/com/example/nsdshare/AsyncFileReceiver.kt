@@ -6,10 +6,9 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
-import com.example.nsdshare.UI_Components.CustomDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -56,8 +55,6 @@ class AsyncFileReceiver(
                             "Accepted incoming connection from ${socketChannel.remoteAddress}"
                         )
 
-//                        nsdShareViewModel.nsdHelper._isReceivingFile.value = true
-
                         // Read the fixed-size header to get the filename length
                         val headerBuffer = ByteBuffer.allocate(HEADER_SIZE)
                         socketChannel.read(headerBuffer).get()
@@ -84,13 +81,19 @@ class AsyncFileReceiver(
                         val downloadsUri =
                             MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
                         val fileUri = contentResolver.insert(downloadsUri, contentValues)
+
+
+                        // Adding the new file name into the _history list to show on receiver's end
+                        val fileShareUnit = ShareUnit(fileName.toHashSet().toString(), File(fileName), mutableStateOf(true))
                         nsdShareViewModel._history.postValue(
                             nsdShareViewModel._history.value?.plus(
                                 listOf(
-                                    ShareUnit(fileName.toHashSet().toString(), File(fileName))
+                                    fileShareUnit
                                 )
                             )
                         )
+                        log(Tag.INFO, "FILENAME : ${fileShareUnit.progress.value}")
+
                         if (fileUri == null) {
                             Log.e(TAG, "Failed to create file: $fileName")
                             return
@@ -125,6 +128,8 @@ class AsyncFileReceiver(
 
                             Log.d(TAG, "Received file $fileName")
                         }
+
+                        fileShareUnit.progress.value = false
 
                         // Accept another connection
                         serverChannel.accept(null, this)

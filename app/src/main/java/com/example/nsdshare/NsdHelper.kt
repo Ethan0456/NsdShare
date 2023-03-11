@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.nsdshare.AsyncFileReceiver
@@ -40,8 +41,6 @@ class NsdHelper(
     private var _isConnected = MutableLiveData(false)
     var isConnected: LiveData<Boolean> = _isConnected
     var socket: Socket = Socket()
-    val _isReceivingFile = MutableLiveData<Boolean>(false)
-    val _fileAccepted = MutableLiveData<Boolean>(false)
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun initializeServerSocket(nsdShareViewModel: NsdShareViewModel) {

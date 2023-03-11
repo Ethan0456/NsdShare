@@ -1,11 +1,8 @@
 package com.example.nsdshare.Screens
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.ContentResolver
 import android.content.Context
-import android.content.Intent
-import android.graphics.DiscretePathEffect
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -27,10 +24,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
-import androidx.core.net.toUri
 import androidx.lifecycle.MutableLiveData
 import androidx.navigation.NavHostController
 import com.ethan.nsdshare.Tag
@@ -38,8 +34,10 @@ import com.ethan.nsdshare.log
 import com.example.nsdshare.AsyncFileSender
 import com.example.nsdshare.NsdShareViewModel
 import com.example.nsdshare.ShareUnit
+import com.example.nsdshare.UI_Components.AcceptDownload
 import com.example.nsdshare.UI_Components.CustomBlock
-import com.example.nsdshare.UI_Components.CustomDialog
+import com.example.nsdshare.UI_Components.CustomDeviceDiscoveryDialog
+import com.example.nsdshare.UI_Components.CustomFileInfoDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,29 +51,38 @@ fun HomeScreen(
     nsdShareViewModel: NsdShareViewModel,
     navHostController: NavHostController
 ) {
-    val connectionStatus: State<String> = nsdShareViewModel.connectionStatus.observeAsState("")
     val historyObs = nsdShareViewModel.history.observeAsState()
     val isConnectedObserver = nsdShareViewModel.nsdHelper.isConnected.observeAsState()
     val discoverDeviceListObserver = nsdShareViewModel.nsdHelper.ls.observeAsState()
-    var isServiceRunning = nsdShareViewModel.nsdHelper.isServiceRunning.observeAsState()
-    var buttonTxt = MutableLiveData("SEND")
-    var showDialog = remember { mutableStateOf(false) }
+    var showDeviceDiscoveryDialog = remember { mutableStateOf(false) }
+    var showFileInfoDialog = remember { mutableStateOf(false) }
     var selectFile = remember { mutableStateOf(false) }
     var _toastTxt = MutableLiveData("")
-    var toastTxtObserver = _toastTxt.observeAsState()
+    var toastTxtObserver = _toastTxt.observeAsState("")
     val context = LocalContext.current
 
+    val longPressedFile = MutableLiveData<File>()
+
+    // Problem was when app starts it gave a blank toast message, this solved it, now it only toast when the _toastTxt changes
     if (toastTxtObserver.value.toString() != "")
         ToastAnywhere(msg = toastTxtObserver.value.toString())
 
+    // Main Column
     Column(
         modifier = Modifier
             .fillMaxSize(),
         verticalArrangement = Arrangement.SpaceAround,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        NsdSwitch(showDialog = showDialog, nsdShareViewModel = nsdShareViewModel)
 
+        // * Top NsdSwitch Composable which displays a switch to on and off the nsd service
+        //                 with functionality of displaying ShowDeviceDiscoveryDialog box
+        NsdSwitch(showDialog = showDeviceDiscoveryDialog, nsdShareViewModel = nsdShareViewModel)
+
+        // * _history is the mutableLiveData list which stores the list of selected files
+        //              and receives files of the respective sender and receiver's end
+        // * historyObs is the observer of _history live data
+        // * This lazy column displays that list
         LazyColumn(
             modifier = Modifier
                 .padding(16.dp)
@@ -86,20 +93,25 @@ fun HomeScreen(
             items(items = historyObs.value!!.toList()) {item->
                 Button(
                     onClick = {
+                        showFileInfoDialog.value = true
+                        longPressedFile.value = item.file
                     },
                     modifier = Modifier
                         .padding(10.dp)
                         .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
                         .clip(RoundedCornerShape(10.dp)),
                 ) {
-                    CustomBlock(
-                        fileName = item.file.name,
-//                        fileStatus = item.fileStatus
+                    // * The CustomBlock is the composable which give the box of the files in the
+                    //          lazycolumn, it returns the mutableState of progress bar component
+                    //          of the CustomBlock to modify it from outside
+                    item.progress = CustomBlock(
+                        shareUnit = item
                     )
                 }
             }
         }
 
+        // Last Column which displays the PICK FILE Button
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,6 +126,8 @@ fun HomeScreen(
                     .weight(1f)
                     .fillMaxSize(),
                 onClick = {
+                    // Sets selectFile MutableState to true, which inturn triggers SelectFile
+                    //          Composable which has this variable as observer
                     selectFile.value = true
                     log(Tag.INFO, "isConnected = ${isConnectedObserver.value}")
                 }
@@ -123,10 +137,31 @@ fun HomeScreen(
                     style = TextStyle(fontWeight = FontWeight.Bold)
                 )
             }
-
         }
-        CustomDialog(
-            showDialog = showDialog,
+
+
+        // Calling CustomFileInfoDialog with specifications, so we can show it with 'showFileInfoDialog'
+        //          It can be called by changing showFileInfoDialog MutableState
+        CustomFileInfoDialog(
+            showFileInfoDialog = showFileInfoDialog,
+            title = "FILE INFO",
+        ) {
+            val fileSizeInBytes = longPressedFile.value!!.length()
+
+            val fileSizeInKilobytes = fileSizeInBytes / 1024.0
+            val fileSizeInMegabytes = fileSizeInKilobytes / 1024.0
+            val fileSizeInGigabytes = fileSizeInMegabytes / 1024.0
+            val fileSizeMBformatted = String.format("%.2f", fileSizeInMegabytes)
+            val fileSizeGBformatted = String.format("%.2f", fileSizeInGigabytes)
+            Text(text = "Name\t:\t${longPressedFile.value!!.name}", modifier = Modifier.padding(vertical = 5.dp))
+            Text(text = "Type\t:\t${ if (longPressedFile.value!!.isFile) "FILE" else "DIRECTORY"}", modifier = Modifier.padding(vertical = 5.dp))
+            Text(text = "Size\t:\t${if (fileSizeInMegabytes > 999) "$fileSizeGBformatted GB" else "$fileSizeMBformatted MB"}", modifier = Modifier.padding(vertical = 5.dp))
+        }
+
+        // Calling CustomDeviceDiscoveryDialog with specifications, so we can show it with 'showDeviceDiscoveryDialog'
+        //          It can be called by changing showDeviceDiscoveryDialog MutableState
+        CustomDeviceDiscoveryDialog(
+            showDeviceDiscoveryDialog = showDeviceDiscoveryDialog,
             title = "Devices On Network",
             composable = {
                 LazyColumn(
@@ -136,34 +171,65 @@ fun HomeScreen(
                         .heightIn(400.dp)
                 ) {
                     items(discoverDeviceListObserver.value!!.toList()) { item->
+                        var _showProgressIndicator = remember { MutableLiveData(false) }
+                        val showProgressIndicatorObserver = _showProgressIndicator.observeAsState()
                         Button(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight()
+                                .padding(5.dp),
                             onClick = {
+                                // If List Not Empty, then only it is meaningful to select a device from list to send files
                                 if (nsdShareViewModel.history.value!!.isNotEmpty()) {
-                                    log(Tag.INFO, "Connected")
-                                    showDialog.value = false
-                                    log(Tag.INFO, "YES IT IS CONNECTED THUS TURNING OFF DIALOG")
                                     val asyncFileSender = AsyncFileSender(item.host, item.port)
+                                    // Start showing progress bar beside the Device Name
+                                    _showProgressIndicator.value = true
                                     CoroutineScope(Dispatchers.IO).launch {
                                         for (file in nsdShareViewModel.history.value!!.toList()) {
-//                                            if (file.fileStatus == "pending") {
+                                            // As well change file progress bar value accordingly
+                                            file.progress.value = true
                                             log(Tag.INFO, "Files in history ${file.file.name}")
                                                 asyncFileSender.sendFile(file.file)
-//                                                file.fileStatus = "completed"
-//                                            }
+                                            file.progress.value = false
                                         }
+                                        // Turn progress bar off when file transfer is complete
+                                        _showProgressIndicator.postValue(false)
                                     }
                                 } else {
                                     _toastTxt.value = "Please Select A File First"
                                 }
                             }
                         ) {
-                            Text(text = String(item.attributes.get("dName")!!, StandardCharsets.UTF_8))
+                            Row(
+                                modifier = Modifier.height(28.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    // "dName" is the attribute which is send along with register request which
+                                    // can be used to show the device name of the Device
+                                    text = String(item.attributes.get("dName")!!, StandardCharsets.UTF_8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+
+                                if (showProgressIndicatorObserver.value == true) {
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    CircularProgressIndicator(
+                                        modifier = Modifier
+                                            .padding(top = 5.dp)
+                                            .width(19.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.background
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         )
+
+        // SelectFile Composable to Select File from File Manager
         SelectFile(context = context,selectFile = selectFile, nsdShareViewModel = nsdShareViewModel)
     }
 }
@@ -206,10 +272,13 @@ fun SelectFile(
                 uri?.let {
                     val file = getFileFromUri(context = context, uri)
                     log(Tag.INFO, "UPDATED HISTORY LIST WITH ${file.name}")
+
+                    // As file is received now update the _history list with the same file
                     nsdShareViewModel._history.setValue(nsdShareViewModel._history.value?.plus(listOf(
-                        ShareUnit(file.absolutePath.toHashSet().toString(),file)
+                        ShareUnit(file.absolutePath.toHashSet().toString(),file, mutableStateOf(false))
                     )))
                     log(Tag.INFO, "AB = ${file.path}")
+                    // Turn off selectFile
                     selectFile.value = false
                 }
             }
@@ -219,7 +288,6 @@ fun SelectFile(
         DisposableEffect(Unit) {
             launcher.launch("*/*")
             onDispose {
-                log(Tag.INFO, "INSIDE ONDISPOSE")
             }
         }
     }
@@ -282,17 +350,3 @@ fun NsdSwitch(
 fun ToastAnywhere(msg: String) {
     Toast.makeText(LocalContext.current, msg, Toast.LENGTH_SHORT).show()
 }
-//Button(
-//modifier = Modifier
-//.background(MaterialTheme.colorScheme.background)
-//.padding(20.dp)
-//.weight(1f)
-//.heightIn(min = 20.dp, max = 50.dp)
-//.fillMaxSize(),
-//onClick = {
-//    showDialog.value = true
-//    log(Tag.INFO, "isConnected = ${isConnectedObserver.value}")
-//}
-//) {
-//    Text(text = "CONNECT")
-//}
