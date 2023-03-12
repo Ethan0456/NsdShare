@@ -109,7 +109,9 @@ fun HomeScreen(
                     //          of the CustomBlock to modify it from outside
                     item.progress = CustomBlock(
                         shareUnit = item
-                    )
+                    ) {
+                        nsdShareViewModel._history.setValue(nsdShareViewModel._history.value!!.minus(item))
+                    }
                 }
             }
         }

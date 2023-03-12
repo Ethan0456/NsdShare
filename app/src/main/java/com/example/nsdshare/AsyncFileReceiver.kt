@@ -74,13 +74,18 @@ class AsyncFileReceiver(
                         log(Tag.INFO, "FILENAME : $fileName")
                         log(Tag.INFO, "RECEIVING FILENAME")
 
-                        nsdShareViewModel.showAskForPermissionDialog.postValue(true)
-                        nsdShareViewModel.incomingFileName.postValue(fileName)
 
+                        // Set filename of the ViewModel variable
+                        nsdShareViewModel.incomingFileName.postValue(fileName)
+                        // Then show the Dialog to ask for permission
+                        nsdShareViewModel.showAskForPermissionDialog.postValue(true)
+
+                        // Wait till user selects any one option
                         runBlocking {
                             while (nsdShareViewModel.askForDownloadResponse.value == -1) {}
                         }
 
+                        // If user accepts then go ahead with download
                         if (nsdShareViewModel.askForDownloadResponse.value == 1) {
                             // Create the file using MediaStore API
                             val contentValues = ContentValues().apply {
@@ -141,9 +146,16 @@ class AsyncFileReceiver(
                                 Log.d(TAG, "Received file $fileName")
                             }
 
+                            // Stop showing progress bar of downloaded file
                             fileShareUnit.progress.value = false
+                            // Set incomingFilename variable to blank
                             nsdShareViewModel.incomingFileName.postValue("")
+                            // Set response to -1 again
                             nsdShareViewModel.askForDownloadResponse.postValue(-1)
+                        }
+                        else {
+                            // Else close connection hence conveying sender that download is rejected
+                            serverChannel.close()
                         }
 
                         // Accept another connection
