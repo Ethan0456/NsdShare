@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,14 +24,14 @@ import androidx.lifecycle.MutableLiveData
 
 @Composable
 fun AcceptDownload(
-    acceptDownloadResponse: MutableLiveData<Boolean>,
+    acceptDownloadResponse: MutableLiveData<Int>,
     showAcceptDownloadDialog: MutableState<Boolean>,
     title: String = "Accept Download?",
-    filename: String
+    filename: State<String?>
 ) {
     val scrollState = rememberScrollState()
 
-    if (showAcceptDownloadDialog.value == true) {
+    if (showAcceptDownloadDialog.value) {
         Dialog(onDismissRequest = {
             showAcceptDownloadDialog.value = false
         }) {
@@ -57,7 +58,7 @@ fun AcceptDownload(
                         )
                     )
                     Text(
-                        text = "File : $filename ",
+                        text = "File : ${filename.value}",
                         maxLines = 5,
                         overflow = TextOverflow.Visible,
                         modifier = Modifier.verticalScroll(scrollState)
@@ -67,16 +68,16 @@ fun AcceptDownload(
                         modifier = Modifier.fillMaxWidth().padding(10.dp)
                     ) {
                         Button(onClick = {
-                            acceptDownloadResponse.value = true
-                            showAcceptDownloadDialog.value = false
-                        }, modifier = Modifier.weight(1f).padding(end = 5.dp)) {
-                            Text(text = "Accept")
-                        }
-                        Button(onClick = {
-                            acceptDownloadResponse.value = false
+                            acceptDownloadResponse.value = 0
                             showAcceptDownloadDialog.value = false
                         }, modifier = Modifier.weight(1f).padding(end = 5.dp)) {
                             Text(text = "Reject")
+                        }
+                        Button(onClick = {
+                            acceptDownloadResponse.value = 1
+                            showAcceptDownloadDialog.value = false
+                        }, modifier = Modifier.weight(1f).padding(end = 5.dp)) {
+                            Text(text = "Accept")
                         }
                     }
                 }

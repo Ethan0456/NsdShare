@@ -11,11 +11,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.MutableLiveData
 import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
+import com.example.nsdshare.Screens.ToastAnywhere
 import com.example.nsdshare.UI_Components.AcceptDownload
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
 import java.net.InetSocketAddress
@@ -60,7 +58,6 @@ class AsyncFileReceiver(
                             Tag.INFO,
                             "Accepted incoming connection from ${socketChannel.remoteAddress}"
                         )
-                        nsdShareViewModel.askForDownloadPermission()
 
                         // Read the fixed-size header to get the filename length
                         val headerBuffer = ByteBuffer.allocate(HEADER_SIZE)
@@ -77,66 +74,77 @@ class AsyncFileReceiver(
                         log(Tag.INFO, "FILENAME : $fileName")
                         log(Tag.INFO, "RECEIVING FILENAME")
 
-                        // Create the file using MediaStore API
-                        val contentValues = ContentValues().apply {
-                            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                            put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
-                            put(MediaStore.Downloads.IS_PENDING, 1)
+                        nsdShareViewModel.showAskForPermissionDialog.postValue(true)
+                        nsdShareViewModel.incomingFileName.postValue(fileName)
+
+                        runBlocking {
+                            while (nsdShareViewModel.askForDownloadResponse.value == -1) {}
                         }
 
-                        val contentResolver = contentResolver
-                        val downloadsUri =
-                            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                        val fileUri = contentResolver.insert(downloadsUri, contentValues)
+                        if (nsdShareViewModel.askForDownloadResponse.value == 1) {
+                            // Create the file using MediaStore API
+                            val contentValues = ContentValues().apply {
+                                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                                put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                                put(MediaStore.Downloads.IS_PENDING, 1)
+                            }
+
+                            val contentResolver = contentResolver
+                            val downloadsUri =
+                                MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                            val fileUri = contentResolver.insert(downloadsUri, contentValues)
 
 
-                        // Adding the new file name into the _history list to show on receiver's end
-                        val fileShareUnit = ShareUnit(fileName.toHashSet().toString(), File(fileName), mutableStateOf(true))
-                        nsdShareViewModel._history.postValue(
-                            nsdShareViewModel._history.value?.plus(
-                                listOf(
-                                    fileShareUnit
+                            // Adding the new file name into the _history list to show on receiver's end
+                            val fileShareUnit = ShareUnit(fileName.toHashSet().toString(), File(fileName), mutableStateOf(true))
+                            nsdShareViewModel._history.postValue(
+                                nsdShareViewModel._history.value?.plus(
+                                    listOf(
+                                        fileShareUnit
+                                    )
                                 )
                             )
-                        )
-                        log(Tag.INFO, "FILENAME : ${fileShareUnit.progress.value}")
+                            log(Tag.INFO, "FILENAME : ${fileShareUnit.progress.value}")
 
-                        if (fileUri == null) {
-                            Log.e(TAG, "Failed to create file: $fileName")
-                            return
-                        }
-
-                        contentResolver.openFileDescriptor(fileUri, "w", null).use { descriptor ->
-                            if (descriptor == null) {
-                                Log.e(TAG, "Failed to open file descriptor for file: $fileName")
+                            if (fileUri == null) {
+                                Log.e(TAG, "Failed to create file: $fileName")
                                 return
                             }
-                            val fileChannel = FileOutputStream(descriptor.fileDescriptor).channel
 
-                            // Read the file data
-                            val dataBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-                            var bytesRead: Int
-                            do {
-                                bytesRead = socketChannel.read(dataBuffer).get()
-                                if (bytesRead > 0) {
-                                    log(Tag.INFO, "RECEIVING FILE")
-                                    dataBuffer.flip()
-                                    fileChannel.write(dataBuffer)
-                                    dataBuffer.clear()
+                            contentResolver.openFileDescriptor(fileUri, "w", null).use { descriptor ->
+                                if (descriptor == null) {
+                                    Log.e(TAG, "Failed to open file descriptor for file: $fileName")
+                                    return
                                 }
-                            } while (bytesRead != -1)
+                                val fileChannel = FileOutputStream(descriptor.fileDescriptor).channel
 
-                            fileChannel.close()
-                            contentValues.clear()
-                            contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
-                            contentResolver.update(fileUri, contentValues, null, null)
+                                // Read the file data
+                                val dataBuffer = ByteBuffer.allocate(BUFFER_SIZE)
+                                var bytesRead: Int
+                                do {
+                                    bytesRead = socketChannel.read(dataBuffer).get()
+                                    if (bytesRead > 0) {
+                                        log(Tag.INFO, "RECEIVING FILE")
+                                        dataBuffer.flip()
+                                        fileChannel.write(dataBuffer)
+                                        dataBuffer.clear()
+                                    }
+                                } while (bytesRead != -1)
 
-                            socketChannel.close()
+                                fileChannel.close()
+                                contentValues.clear()
+                                contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
+                                contentResolver.update(fileUri, contentValues, null, null)
 
-                            Log.d(TAG, "Received file $fileName")
+                                socketChannel.close()
+
+                                Log.d(TAG, "Received file $fileName")
+                            }
+
+                            fileShareUnit.progress.value = false
+                            nsdShareViewModel.incomingFileName.postValue("")
+                            nsdShareViewModel.askForDownloadResponse.postValue(-1)
                         }
-
-                        fileShareUnit.progress.value = false
 
                         // Accept another connection
                         serverChannel.accept(null, this)

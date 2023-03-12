@@ -61,7 +61,10 @@ fun HomeScreen(
     var toastTxtObserver = _toastTxt.observeAsState("")
     val context = LocalContext.current
 
-    val longPressedFile = MutableLiveData<File>()
+    val fileSelectedToGetInfo = MutableLiveData<File>()
+
+
+    val showAskForPermissionDialogObserver = nsdShareViewModel.showAskForPermissionDialog.observeAsState()
 
     // Problem was when app starts it gave a blank toast message, this solved it, now it only toast when the _toastTxt changes
     if (toastTxtObserver.value.toString() != "")
@@ -94,7 +97,7 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         showFileInfoDialog.value = true
-                        longPressedFile.value = item.file
+                        fileSelectedToGetInfo.value = item.file
                     },
                     modifier = Modifier
                         .padding(10.dp)
@@ -146,15 +149,15 @@ fun HomeScreen(
             showFileInfoDialog = showFileInfoDialog,
             title = "FILE INFO",
         ) {
-            val fileSizeInBytes = longPressedFile.value!!.length()
+            val fileSizeInBytes = fileSelectedToGetInfo.value!!.length()
 
             val fileSizeInKilobytes = fileSizeInBytes / 1024.0
             val fileSizeInMegabytes = fileSizeInKilobytes / 1024.0
             val fileSizeInGigabytes = fileSizeInMegabytes / 1024.0
             val fileSizeMBformatted = String.format("%.2f", fileSizeInMegabytes)
             val fileSizeGBformatted = String.format("%.2f", fileSizeInGigabytes)
-            Text(text = "Name\t:\t${longPressedFile.value!!.name}", modifier = Modifier.padding(vertical = 5.dp))
-            Text(text = "Type\t:\t${ if (longPressedFile.value!!.isFile) "FILE" else "DIRECTORY"}", modifier = Modifier.padding(vertical = 5.dp))
+            Text(text = "Name\t:\t${fileSelectedToGetInfo.value!!.name}", modifier = Modifier.padding(vertical = 5.dp))
+            Text(text = "Type\t:\t${ if (fileSelectedToGetInfo.value!!.isFile) "FILE" else "DIRECTORY"}", modifier = Modifier.padding(vertical = 5.dp))
             Text(text = "Size\t:\t${if (fileSizeInMegabytes > 999) "$fileSizeGBformatted GB" else "$fileSizeMBformatted MB"}", modifier = Modifier.padding(vertical = 5.dp))
         }
 
@@ -231,6 +234,13 @@ fun HomeScreen(
 
         // SelectFile Composable to Select File from File Manager
         SelectFile(context = context,selectFile = selectFile, nsdShareViewModel = nsdShareViewModel)
+
+        // Ask for download permission dialog
+        AcceptDownload(
+            acceptDownloadResponse = nsdShareViewModel.askForDownloadResponse,
+            showAcceptDownloadDialog = showAskForPermissionDialogObserver as MutableState<Boolean>,
+            filename = nsdShareViewModel.incomingFileName.observeAsState()
+        )
     }
 }
 

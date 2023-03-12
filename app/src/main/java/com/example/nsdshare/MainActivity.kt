@@ -1,8 +1,10 @@
 package com.example.nsdshare
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -16,6 +18,7 @@ import com.example.ftpm3.ui.theme.NsdShareTheme
 import com.example.nsdshare.Navigation.SetupNavGraph
 
 class MainActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -25,7 +28,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val contentResolver = getContentResolver()
+                    val contentResolver = contentResolver
                     val nsdShareViewModel = NsdShareViewModel(this, contentResolver)
                     val navHostController = rememberNavController()
                     lifecycle.addObserver(CustomLifeCycleObserver(this, nsdShareViewModel))

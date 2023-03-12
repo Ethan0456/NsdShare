@@ -37,18 +37,8 @@ class NsdShareViewModel(
     val nsdHelper = NsdHelper(contentResolver, discoverDeviceList)
 
     val showAskForPermissionDialog = MutableLiveData(false)
-    val askForDownloadResponse = MutableLiveData(false)
-
-    fun askForDownloadPermission() {
-        CoroutineScope(Dispatchers.IO).launch {
-            val completableDeferred = CompletableDeferred<Unit>()
-            completableDeferred.await()
-            if (completableDeferred.isActive) {
-                showAskForPermissionDialog.value = true
-            }
-        }
-        return askforpermission
-    }
+    val askForDownloadResponse = MutableLiveData(-1)
+    val incomingFileName = MutableLiveData("")
 
     fun registerDeviceName() {
         nsdHelper.deviceName = customDeviceName
