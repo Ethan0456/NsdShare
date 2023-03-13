@@ -29,9 +29,9 @@ class NsdHelper(
 ) {
     var serverSocket: ServerSocket? = null
     private var mLocalPort: Int = 0
-    private var mServiceName: String = "NsdShare"
+    private var mServiceName: String = "NsdChat"
     lateinit var nsdManager: NsdManager
-    private val SERVICE_TYPE = "_nsdshare._tcp."
+    private val SERVICE_TYPE = "_nsdchat._tcp."
     private var resolvedPort by Delegates.notNull<Int>()
     private lateinit var resolvedHost: InetAddress
     private lateinit var resolvedmService : NsdServiceInfo
