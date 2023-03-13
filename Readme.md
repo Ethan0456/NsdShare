@@ -2,7 +2,7 @@
 
 * NsdShare is a Socket based File Sharing App designed in Kotlin with Jetpack Compose.
 
-Download Link : [DOWNLOAD](https://github.com/Ethan0456/NsdShare/blob/ea9894edaa0e64bb3dd5b7516cd6eb4c73db1d08/app/release/app-release.apk)
+Download Link : [Download](https://drive.google.com/file/d/1CYdfgul_A0rZnSEBigLOtSEWNlGUEDkj/view?usp=share_link)
 
 # Features, ScreenShots and Procedure to Use
 
