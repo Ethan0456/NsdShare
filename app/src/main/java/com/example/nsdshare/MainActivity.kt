@@ -14,8 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.rememberNavController
 import com.ethan.nsdshare.CustomLifeCycleObserver
-import com.example.ftpm3.ui.theme.NsdShareTheme
 import com.example.nsdshare.Navigation.SetupNavGraph
+import com.example.nsdshare.ui.theme.NsdShareTheme
 
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.Q)

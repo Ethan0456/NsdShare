@@ -1,4 +1,4 @@
-package com.example.ftpm3.ui.theme
+package com.example.nsdshare.ui.theme
 import androidx.compose.ui.graphics.Color
 
 val md_theme_light_primary = Color(0xFF004FE5)
