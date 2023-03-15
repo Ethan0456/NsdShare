@@ -194,7 +194,7 @@ fun HomeScreen(
                                             // As well change file progress bar value accordingly
                                             file.progress.value = true
                                             log(Tag.INFO, "Files in history ${file.file.name}")
-                                                asyncFileSender.sendFile(file.file)
+                                            asyncFileSender.sendFile(file)
                                             file.progress.value = false
                                         }
                                         // Turn progress bar off when file transfer is complete
@@ -287,7 +287,7 @@ fun SelectFile(
 
                     // As file is received now update the _history list with the same file
                     nsdShareViewModel._history.setValue(nsdShareViewModel._history.value?.plus(listOf(
-                        ShareUnit(file.absolutePath.toHashSet().toString(),file, mutableStateOf(false))
+                        ShareUnit(file.absolutePath.toHashSet().toString(),file, mutableStateOf(false), MutableLiveData(0))
                     )))
                     log(Tag.INFO, "AB = ${file.path}")
                     // Turn off selectFile

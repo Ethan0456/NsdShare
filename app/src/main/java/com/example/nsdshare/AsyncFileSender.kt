@@ -7,7 +7,6 @@ import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -15,9 +14,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousFileChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.Channels
-import java.nio.channels.CompletionHandler
 import java.nio.file.StandardOpenOption
-import java.util.concurrent.CompletableFuture
 
 class AsyncFileSender(private val host: InetAddress, private val port: Int) {
 
@@ -28,10 +25,10 @@ class AsyncFileSender(private val host: InetAddress, private val port: Int) {
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
-    suspend fun sendFile(file: File) = withContext(Dispatchers.IO) {
+    suspend fun sendFile(shareUnit: ShareUnit) = withContext(Dispatchers.IO) {
         try {
             val fileChannel = AsynchronousFileChannel.open(
-                file.toPath(),
+                shareUnit.file.toPath(),
                 StandardOpenOption.READ
             )
 
@@ -45,15 +42,15 @@ class AsyncFileSender(private val host: InetAddress, private val port: Int) {
 
             // Send fixed-size header with filename length and file size
             val headerBuffer = ByteBuffer.allocate(FIXED_HEADER_SIZE)
-            headerBuffer.putInt(file.name.length)
-            log(Tag.INFO, "FILENAME LENGTH : ${file.name.length}")
+            headerBuffer.putInt(shareUnit.file.name.length)
+            log(Tag.INFO, "FILENAME LENGTH : ${shareUnit.file.name.length}")
             headerBuffer.putLong(fileSize)
             headerBuffer.flip()
             outputStream.write(headerBuffer.array())
 
             // Send file name
-            outputStream.write(file.name.toByteArray())
-            log(Tag.INFO, "FILENAME byte array: ${file.name.toByteArray()}")
+            outputStream.write(shareUnit.file.name.toByteArray())
+            log(Tag.INFO, "FILENAME byte array: ${shareUnit.file.name.toByteArray()}")
             outputStream.flush()
 
             // Send file content
@@ -66,6 +63,9 @@ class AsyncFileSender(private val host: InetAddress, private val port: Int) {
                 }
 
                 totalBytesRead += bytesRead
+
+                shareUnit.progressAmount.postValue(((totalBytesRead/fileSize)*100))
+
                 buffer.flip()
                 outputStream.write(buffer.array(), 0, bytesRead)
                 buffer.clear()

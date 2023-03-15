@@ -101,7 +101,7 @@ class AsyncFileReceiver(
 
 
                             // Adding the new file name into the _history list to show on receiver's end
-                            val fileShareUnit = ShareUnit(fileName.toHashSet().toString(), File(fileName), mutableStateOf(true))
+                            val fileShareUnit = ShareUnit(fileName.toHashSet().toString(), File(fileName), mutableStateOf(true), MutableLiveData(0))
                             nsdShareViewModel._history.postValue(
                                 nsdShareViewModel._history.value?.plus(
                                     listOf(

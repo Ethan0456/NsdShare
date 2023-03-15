@@ -10,9 +10,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,6 +29,7 @@ fun CustomBlock(
 ): MutableState<Boolean> {
     val scrollableState = rememberScrollState()
     val showProgressBar = remember { shareUnit.progress }
+    val progressAmountObserver = shareUnit.progressAmount.observeAsState()
 
     Row(
         modifier = Modifier
@@ -55,13 +58,20 @@ fun CustomBlock(
                 color = MaterialTheme.colorScheme.background,
                 modifier = Modifier
                     .align(Alignment.CenterVertically)
-                    .padding(top = 9.dp,start = 4.dp, end = 4.dp)
+                    .padding(top = 9.dp, start = 4.dp, end = 4.dp)
                     .width(19.dp)
-                    .clickable {  }
+                    .clickable { }
                     .weight(1f),
                 strokeWidth = 2.dp
             )
         }
+        Text(
+            text = progressAmountObserver.value.toString(),
+            modifier = Modifier.weight(1f),
+            style = TextStyle(
+                color = MaterialTheme.colorScheme.primary
+            )
+        )
         IconButton(
             modifier = Modifier.weight(1f),
             onClick = {

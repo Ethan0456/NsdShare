@@ -1,6 +1,7 @@
 package com.example.nsdshare
 
 import androidx.compose.runtime.MutableState
+import androidx.lifecycle.MutableLiveData
 import java.io.File
 
 //data class ShareUnit(
@@ -12,5 +13,6 @@ import java.io.File
 data class ShareUnit(
     val hash: String,
     val file: File,
-    var progress: MutableState<Boolean>
+    var progress: MutableState<Boolean>,
+    var progressAmount: MutableLiveData<Long>
 )
