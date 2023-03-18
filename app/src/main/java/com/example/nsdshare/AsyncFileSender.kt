@@ -7,7 +7,6 @@ import com.ethan.nsdshare.Tag
 import com.ethan.nsdshare.log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
@@ -63,8 +62,7 @@ class AsyncFileSender(private val host: InetAddress, private val port: Int) {
                 }
 
                 totalBytesRead += bytesRead
-
-                shareUnit.progressAmount.postValue(((totalBytesRead/fileSize)*100))
+                shareUnit.progressAmount.postValue(((totalBytesRead.toDouble()/fileSize.toDouble())*100).toLong())
 
                 buffer.flip()
                 outputStream.write(buffer.array(), 0, bytesRead)

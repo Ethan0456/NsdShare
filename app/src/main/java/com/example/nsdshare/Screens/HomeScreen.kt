@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +43,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import androidx.compose.ui.text.TextStyle
 
 @RequiresApi(Build.VERSION_CODES.Q)
 @Composable
@@ -107,11 +107,14 @@ fun HomeScreen(
                     // * The CustomBlock is the composable which give the box of the files in the
                     //          lazycolumn, it returns the mutableState of progress bar component
                     //          of the CustomBlock to modify it from outside
-                    item.progress = CustomBlock(
-                        shareUnit = item
+                    val result = CustomBlock(
+                        shareUnit = item,
                     ) {
                         nsdShareViewModel._history.setValue(nsdShareViewModel._history.value!!.minus(item))
                     }
+
+                    item.progress = result.progress
+                    item.progressAmount = result.progressAmount
                 }
             }
         }
@@ -139,7 +142,8 @@ fun HomeScreen(
             ) {
                 Text(
                     text = "PICK FILE",
-                    style = TextStyle(fontWeight = FontWeight.Bold)
+//                    style = TextStyle(fontWeight = FontWeight.Bold)
+                style = TextStyle()
                 )
             }
         }

@@ -64,6 +64,8 @@ class AsyncFileReceiver(
                         socketChannel.read(headerBuffer).get()
                         headerBuffer.flip()
                         val fileNameLength = headerBuffer.int
+                        val fileSize = headerBuffer.long
+                        log(Tag.INFO, "FILESIZE ON RECEIVER'S END : $fileSize")
 
                         // Read the filename
                         val fileNameBuffer = ByteBuffer.allocate(fileNameLength)
@@ -126,13 +128,16 @@ class AsyncFileReceiver(
                                 // Read the file data
                                 val dataBuffer = ByteBuffer.allocate(BUFFER_SIZE)
                                 var bytesRead: Int
+                                var totalBytesRead: Int = 0
                                 do {
                                     bytesRead = socketChannel.read(dataBuffer).get()
                                     if (bytesRead > 0) {
+                                        totalBytesRead += bytesRead
                                         log(Tag.INFO, "RECEIVING FILE")
                                         dataBuffer.flip()
                                         fileChannel.write(dataBuffer)
                                         dataBuffer.clear()
+                                        fileShareUnit.progressAmount.postValue(((totalBytesRead.toDouble()/fileSize.toDouble())*100).toLong())
                                     }
                                 } while (bytesRead != -1)
 
